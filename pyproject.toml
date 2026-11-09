@@ -1,0 +1,18 @@
+[project]
+name = "dqn-bowling"
+version = "0.1.0"
+description = "Deep Q-Network agent for Atari Bowling (ALE/Bowling-v5)"
+readme = "README.md"
+# ale-py 0.12.1 publishes wheels up to Python 3.14; there are none for 3.15 yet.
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "ale-py>=0.12.1",
+    "gymnasium>=1.4.0",
+    "matplotlib>=3.11.2",
+    "opencv-python>=5.0.0.93",
+    "torch>=2.15.0",
+]
+
+[tool.uv]
+# Plain scripts at the repo root (uv run train.py), not an installable package.
+package = false

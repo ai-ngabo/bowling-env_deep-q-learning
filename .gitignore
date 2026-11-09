@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# uv virtual environment (recreate with: uv sync)
+.venv/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
