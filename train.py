@@ -53,46 +53,50 @@ def parse_args(argv=None):
 # Setting environment, replay buffer, logging
 
 def make_env(render_mode=None):
-    """Create Bowling with standard DQN preprocessing.
+    """Create Bowling env with standard DQN preprocessing.
 
-    Must return an env whose observations are uint8 arrays of shape (4, 84, 84):
-    the last 4 frames, grayscale, resized to 84x84.
-    Hint: gym.make(ENV_ID, frameskip=1, ...), then AtariPreprocessing
-    (frame_skip=4), then FrameStackObservation (stack_size=4).
-    play.py will call make_env(render_mode="human").
+      -Observations are uint8 arrays of shape (4, 84, 84): the last 4 frames,
+       grayscale and resized to 84x84.
     """
-    raise NotImplementedError("TODO: make_env")
+    # frameskip=1: frame skipping by AtariPreprocessing
+    bowling_env = gym.make(ENV_ID, frameskip=1, render_mode=render_mode)
+    bowling_env = gym.wrappers.AtariPreprocessing(bowling_env, frame_skip=4, screen_size=84, grayscale_obs=True)
+    bowling_env = gym.wrappers.FrameStackObservation(bowling_env, stack_size=4)
+    return bowling_env
 
 
 class ReplayBuffer:
     """Stores past transitions and returns random mini-batches of them."""
 
     def __init__(self, capacity):
-        """Keep at most `capacity` transitions; drop the oldest when full."""
-        raise NotImplementedError("TODO: ReplayBuffer.__init__")
+        self.memory = deque(maxlen=capacity)  # drops oldest trans.. when it's full
 
     def push(self, state, action, reward, next_state, done):
-        """Store one transition."""
-        raise NotImplementedError("TODO: ReplayBuffer.push")
+        self.memory.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        """Return 5 numpy arrays picked at random:
-        states (B, 4, 84, 84) uint8, actions (B,) int64, rewards (B,) float32,
-        next_states (B, 4, 84, 84) uint8, dones (B,) float32 (1.0 = episode ended).
-        """
-        raise NotImplementedError("TODO: ReplayBuffer.sample")
+        batch = random.sample(self.memory, batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
+        return (
+            np.array(states),           # (B, 4, 84, 84) uint8
+            np.array(actions, dtype=np.int64),    # (B,)
+            np.array(rewards, dtype=np.float32),   # (B,)
+            np.array(next_states),         # (B, 4, 84, 84) uint8
+            np.array(dones, dtype=np.float32),    # (B,) 1.0 if the episode ended
+        )
 
     def __len__(self):
-        """Number of transitions stored."""
-        raise NotImplementedError("TODO: ReplayBuffer.__len__")
+        return len(self.memory)
 
 
 def log_episode(csv_path, episode, episode_length, total_steps, reward, epsilon):
-    """Write one CSV row per finished episode. Episode 1 starts a fresh file.
-
-    Columns: episode, episode_length, total_steps, reward, epsilon
-    """
-    raise NotImplementedError("TODO: log_episode")
+    """ Writes one row per finished ep. & episode 1 starts a new file.."""
+    mode = "w" if episode == 1 else "a"
+    with open(csv_path, mode, newline="") as file:
+        editor = csv.writer(file)
+        if episode == 1:
+            editor.writerow(["episode", "episode_length", "total_steps", "reward", "epsilon"])
+        editor.writerow([episode, episode_length, total_steps, reward, round(epsilon, 4)])
 
 
 
