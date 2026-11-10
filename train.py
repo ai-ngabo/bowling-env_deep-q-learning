@@ -109,24 +109,50 @@ class QNetwork(nn.Module):
     (scale to 0-1 inside forward). Output: tensor (B, num_actions).
     """
 
+
     def __init__(self, num_actions):
         super().__init__()
-        raise NotImplementedError("TODO: QNetwork layers")
+        # 3 conv layers find patterns in the frames (lane, ball, pins): 84x84 -> 20x20 -> 9x9 -> 7x7
+        self.conv1 = nn.Conv2d(4, 32, kernel_size=8, stride=4)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+
+        # 2 fully connected layers turn those patterns into one score per action
+        self.fc1 = nn.Linear(64 * 7 * 7, 512)
+        self.output = nn.Linear(512, num_actions)
 
     def forward(self, x):
-        raise NotImplementedError("TODO: QNetwork.forward")
+        x = x.float() / 255.0  # pixels 0-255 become 0-1
+
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.flatten(start_dim=1)  # (B, 64, 7, 7) -> (B, 3136)
+        x = F.relu(self.fc1(x))
+
+        # no need of softmax activation function: Q-values are expected rewards, not probabilities
+        return self.output(x)
 
 
 def get_epsilon(step, eps_start, eps_end, eps_decay):
     """Linear decay: eps_start at step 0, eps_end at step eps_decay, then stay at eps_end."""
-    raise NotImplementedError("TODO: get_epsilon")
+    progress = min(step / eps_decay, 1.0)  # 0 at the start, 1 once decay is over
+    return eps_start + progress * (eps_end - eps_start)
 
 
 def select_action(q_network, state, epsilon, num_actions, device):
     """Epsilon-greedy. With probability epsilon return a random action (int),
     otherwise the action with the highest Q-value for `state` (4, 84, 84).
     """
-    raise NotImplementedError("TODO: select_action")
+    # explore: press a random button
+    if random.random() < epsilon:
+        return random.randrange(num_actions)
+
+    # exploit: press the button with the highest Q-value
+    state_tensor = torch.as_tensor(np.asarray(state), device=device).unsqueeze(0)  # add batch dim
+    with torch.no_grad():  # only choosing, not learning
+        q_values = q_network(state_tensor)
+    return int(q_values.argmax(dim=1).item())
 
 
 # DQN update and training loop
