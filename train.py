@@ -165,7 +165,32 @@ def train_step(online_net, target_net, optimizer, buffer, batch_size, gamma, dev
     3. Huber loss, then zero_grad, backward, optimizer.step
     Must not change target_net.
     """
-    raise NotImplementedError("TODO: train_step")
+    states, actions, rewards, next_states, dones = buffer.sample(batch_size)
+
+    states = torch.as_tensor(states, device=device)
+    actions = torch.as_tensor(actions, device=device)
+    rewards = torch.as_tensor(rewards, device=device)
+    next_states = torch.as_tensor(next_states, device=device)
+    dones = torch.as_tensor(dones, device=device)
+
+    # Q(s, a) for the actions that were actually taken
+    q_values = online_net(states)
+    q_taken = q_values.gather(1, actions.unsqueeze(1)).squeeze(1)
+
+    # Bellman target using the target network (no gradient through target)
+    with torch.no_grad():
+        next_q = target_net(next_states)
+        max_next_q = next_q.max(dim=1).values
+        # when done=1 the future term is zeroed out
+        targets = rewards + gamma * max_next_q * (1.0 - dones)
+
+    loss = F.smooth_l1_loss(q_taken, targets)
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+
+    return float(loss.item())
 
 
 def main():
@@ -183,7 +208,78 @@ def main():
          when the episode ends: log_episode, print a line, reset the env
     5. save online_net.state_dict() to dqn_model.pth
     """
-    raise NotImplementedError("TODO: main training loop")
+    args = parse_args()
+
+    # reproducibility
+    random.seed(SEED)
+    np.random.seed(SEED)
+    torch.manual_seed(SEED)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
+
+    # output folder: Francis/exp01/, Francis/exp02/, ...
+    out_dir = os.path.join(args.member, f"exp{args.exp:02d}")
+    os.makedirs(out_dir, exist_ok=True)
+    csv_path = os.path.join(out_dir, "episodes.csv")
+    model_path = os.path.join(out_dir, "dqn_model.pth")
+
+    env = make_env()
+    num_actions = env.action_space.n
+
+    online_net = QNetwork(num_actions).to(device)
+    target_net = QNetwork(num_actions).to(device)
+    target_net.load_state_dict(online_net.state_dict())
+    target_net.eval()  # target is never trained
+
+    optimizer = torch.optim.Adam(online_net.parameters(), lr=args.lr)
+    buffer = ReplayBuffer(BUFFER_SIZE)
+
+    state, _ = env.reset(seed=SEED)
+    episode = 0
+    episode_reward = 0.0
+    episode_length = 0
+
+    for step in range(1, args.total_steps + 1):
+        epsilon = get_epsilon(step, args.eps_start, args.eps_end, args.eps_decay)
+        action = select_action(online_net, state, epsilon, num_actions, device)
+
+        next_state, reward, terminated, truncated, _ = env.step(action)
+        # only terminal (game over) zeros the bootstrap; truncation does not
+        done = terminated
+
+        buffer.push(state, action, reward, next_state, float(done))
+        state = next_state
+        episode_reward += reward
+        episode_length += 1
+
+        # start learning after the buffer has enough data
+        if step >= LEARNING_STARTS and step % TRAIN_EVERY == 0:
+            train_step(
+                online_net, target_net, optimizer, buffer,
+                args.batch_size, args.gamma, device,
+            )
+
+        # hard update of the target network
+        if step % TARGET_UPDATE_EVERY == 0:
+            target_net.load_state_dict(online_net.state_dict())
+
+        if terminated or truncated:
+            episode += 1
+            log_episode(csv_path, episode, episode_length, step, episode_reward, epsilon)
+            print(
+                f"Episode {episode:4d} | steps {step:7d} | "
+                f"len {episode_length:5d} | reward {episode_reward:7.1f} | "
+                f"eps {epsilon:.3f}"
+            )
+            state, _ = env.reset()
+            episode_reward = 0.0
+            episode_length = 0
+
+    # save the final online network
+    torch.save(online_net.state_dict(), model_path)
+    print(f"Model saved to {model_path}")
+    env.close()
 
 
 if __name__ == "__main__":
