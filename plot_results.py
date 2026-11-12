@@ -1,48 +1,41 @@
-"""Plot DQN training results from episodes.csv files.
+"""Plot DQN training results from episodes.csv.
 
 Usage:
-    uv run plot_results.py --member Francis            # all experiments vs the baseline (Exp 1)
-    uv run plot_results.py --member Francis --exp 4    # training curves of one experiment
+    uv run plot_results.py --member Alain            # every experiment compared with the baseline (Exp 1)
+    uv run plot_results.py --member Alain --exp 4    # rewards, episode length and steps of one experiment
 """
 
 import argparse
 import csv
-import math
 import os
 
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
 
 RANDOM_PLAY = 23  # average score of random play in Bowling
-BLUE, GRAY, GRID, INK = "#2a78d6", "#86857f", "#e4e3df", "#52514e"
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Plot DQN training results")
-    parser.add_argument("--member", required=True, help="Member folder, e.g. Francis")
+    parser.add_argument("--member", required=True, help="Member folder, e.g. Alain")
     parser.add_argument("--exp", type=int, help="Experiment number (leave out to compare all experiments)")
     return parser.parse_args()
 
 
 def load_log(member, exp):
-    """Read one experiment's episodes.csv into lists, or return None if it doesn't exist."""
+    """Read one experiment's episodes.csv into lists."""
     csv_path = os.path.join(member, f"exp{exp:02d}", "episodes.csv")
-    if not os.path.isfile(csv_path):
-        return None
-
-    log = {"episodes": [], "lengths": [], "steps": [], "rewards": [], "epsilons": []}
+    episodes, lengths, steps, rewards = [], [], [], []
     with open(csv_path, newline="") as f:
         for row in csv.DictReader(f):
-            log["episodes"].append(int(row["episode"]))
-            log["lengths"].append(int(row["episode_length"]))
-            log["steps"].append(int(row["total_steps"]))
-            log["rewards"].append(float(row["reward"]))
-            log["epsilons"].append(float(row["epsilon"]))
-    return log
+            episodes.append(int(row["episode"]))
+            lengths.append(int(row["episode_length"]))
+            steps.append(int(row["total_steps"]))
+            rewards.append(float(row["reward"]))
+    return episodes, lengths, steps, rewards
 
 
-def rolling_average(values, window=10):
-    """Average of the last `window` games at each point (smooths the noisy rewards)."""
+def moving_average(values, window=10):
+    """Average of the last 10 games at each point, so the trend is easier to see."""
     averages = []
     for i in range(len(values)):
         recent = values[max(0, i - window + 1): i + 1]
@@ -50,89 +43,59 @@ def rolling_average(values, window=10):
     return averages
 
 
-def style(ax):
-    """Light grid, no top/right border."""
-    ax.grid(axis="y", color=GRID, linewidth=0.8)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.tick_params(colors=INK, labelsize=8)
+def plot_experiment(member, exp):
+    """Three charts for one experiment: rewards, episode length, and rewards against steps."""
+    episodes, lengths, steps, rewards = load_log(member, exp)
+    fig, axes = plt.subplots(1, 3, figsize=(16, 4))
 
+    axes[0].plot(episodes, rewards, alpha=0.3, label="Each game")
+    axes[0].plot(episodes, moving_average(rewards), label="10-game average")
+    axes[0].axhline(RANDOM_PLAY, color="gray", linestyle="--", label="Random play")
+    axes[0].set_xlabel("Episode")
+    axes[0].set_ylabel("Reward")
+    axes[0].legend()
 
-def plot_comparison(member):
-    """One small chart per experiment, each drawn against the baseline (Exp 1)."""
-    experiments = sorted(int(name[3:]) for name in os.listdir(member)
-                         if name.startswith("exp") and name[3:].isdigit()
-                         and os.path.isfile(os.path.join(member, name, "episodes.csv")))
-    if not experiments:
-        raise FileNotFoundError(f"No episodes.csv found under {member}/. Run train.py first.")
-    baseline = load_log(member, 1)
+    axes[1].plot(episodes, lengths)
+    axes[1].set_xlabel("Episode")
+    axes[1].set_ylabel("Episode length (steps)")
 
-    rows = math.ceil(len(experiments) / 5)
-    fig, axes = plt.subplots(rows, 5, figsize=(16, 3.2 * rows), sharex=True, sharey=True, squeeze=False)
-    for ax, exp in zip(axes.flat, experiments):
-        rewards = load_log(member, exp)["rewards"]
-        last_20 = sum(rewards[-20:]) / len(rewards[-20:])
-        ax.axhline(RANDOM_PLAY, color=GRAY, linestyle="--", linewidth=1)
-        if baseline and exp != 1:
-            ax.plot(rolling_average(baseline["rewards"]), color=GRAY, linewidth=2)
-        ax.plot(rolling_average(rewards), color=BLUE, linewidth=2)
-        ax.set_title(f"Exp {exp}  (last 20 games: {last_20:.1f})", fontsize=10, loc="left", color=INK)
-        style(ax)
-    for ax in list(axes.flat)[len(experiments):]:
-        ax.axis("off")
+    axes[2].plot(steps, moving_average(rewards))
+    axes[2].axhline(RANDOM_PLAY, color="gray", linestyle="--")
+    axes[2].set_xlabel("Total steps")
+    axes[2].set_ylabel("Reward (10-game average)")
 
-    legend = [Line2D([], [], color=BLUE, linewidth=2, label="This experiment"),
-              Line2D([], [], color=GRAY, linewidth=2, label="Baseline (Exp 1)"),
-              Line2D([], [], color=GRAY, linewidth=1, linestyle="--", label="Random play (about 23)")]
-    fig.legend(handles=legend, loc="upper right", ncol=3, frameon=False, fontsize=9)
-    fig.suptitle(f"{member}: reward per game, 10-game average", x=0.01, ha="left", fontsize=12, color=INK)
-    fig.supxlabel("Game", fontsize=9, color=INK)
-    fig.supylabel("Reward", fontsize=9, color=INK)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
-
-    out_path = os.path.join(member, "reward_curves.png")
-    fig.savefig(out_path, dpi=150)
+    fig.suptitle(f"{member} exp{exp:02d}: training curves")
+    fig.tight_layout()
+    out_path = os.path.join(member, f"exp{exp:02d}", "training_plot.png")
+    fig.savefig(out_path, dpi=120)
     print(f"Saved plot to {out_path}")
     plt.close(fig)
 
 
-def plot_experiment(member, exp):
-    """Rewards, episode length and number of steps for one experiment."""
-    log = load_log(member, exp)
-    if log is None:
-        raise FileNotFoundError(f"No log found for {member} exp{exp:02d}. Run train.py first.")
-    smooth = rolling_average(log["rewards"])
+def plot_comparison(member):
+    """One small chart per experiment (Exp 1 to 10), each with the baseline (Exp 1) in gray."""
+    _, _, _, baseline = load_log(member, 1)
+    fig, axes = plt.subplots(2, 5, figsize=(18, 7), sharey=True)
 
-    fig, axes = plt.subplots(1, 3, figsize=(16, 4))
+    for exp, ax in zip(range(1, 11), axes.flat):
+        if not os.path.isfile(os.path.join(member, f"exp{exp:02d}", "episodes.csv")):
+            ax.set_title(f"Exp {exp}: not run yet")
+            continue
+        _, _, _, rewards = load_log(member, exp)
+        if exp != 1:
+            ax.plot(moving_average(baseline), color="gray", label="Baseline (Exp 1)")
+        ax.plot(moving_average(rewards), color="tab:blue", label=f"Exp {exp}")
+        ax.axhline(RANDOM_PLAY, color="gray", linestyle="--", linewidth=1)
+        ax.set_title(f"Exp {exp}")
+        ax.set_xlabel("Episode")
+        ax.legend(fontsize=8)
 
-    axes[0].scatter(log["episodes"], log["rewards"], color=BLUE, alpha=0.3, s=12)
-    axes[0].plot(log["episodes"], smooth, color=BLUE, linewidth=2)
-    axes[0].axhline(RANDOM_PLAY, color=GRAY, linestyle="--", linewidth=1)
-    axes[0].set_title("Reward per game (dots) and 10-game average", fontsize=10, loc="left", color=INK)
-    axes[0].set_xlabel("Game", fontsize=9, color=INK)
-
-    axes[1].plot(log["episodes"], log["lengths"], color=BLUE, linewidth=1.5)
-    axes[1].set_title("Episode length (steps per game)", fontsize=10, loc="left", color=INK)
-    axes[1].set_xlabel("Game", fontsize=9, color=INK)
-
-    # Mark when epsilon stops falling: from there on the agent mostly uses what it learned
-    min_epsilon_step = log["steps"][log["epsilons"].index(min(log["epsilons"]))]
-    axes[2].plot(log["steps"], smooth, color=BLUE, linewidth=2)
-    axes[2].axhline(RANDOM_PLAY, color=GRAY, linestyle="--", linewidth=1)
-    axes[2].axvline(min_epsilon_step, color=GRAY, linestyle=":", linewidth=1)
-    axes[2].annotate("epsilon at minimum", (min_epsilon_step, 0.97), xycoords=("data", "axes fraction"),
-                     xytext=(-3, 0), textcoords="offset points", rotation=90, ha="right", va="top",
-                     fontsize=8, color=INK)
-    axes[2].xaxis.set_major_formatter(lambda value, _: f"{value / 1000:.0f}k")
-    axes[2].set_title("10-game average reward vs number of steps", fontsize=10, loc="left", color=INK)
-    axes[2].set_xlabel("Total agent steps", fontsize=9, color=INK)
-
-    for ax in axes:
-        style(ax)
-    fig.suptitle(f"{member} exp{exp:02d}: training curves", x=0.01, ha="left", fontsize=12, color=INK)
-    fig.tight_layout(rect=(0, 0, 1, 0.93))
-
-    out_path = os.path.join(member, f"exp{exp:02d}", "training_plot.png")
-    fig.savefig(out_path, dpi=150)
+    axes[0, 0].set_ylabel("Reward (10-game average)")
+    axes[1, 0].set_ylabel("Reward (10-game average)")
+    fig.suptitle(f"{member}: each experiment compared with the baseline")
+    fig.tight_layout()
+    out_path = os.path.join(member, "reward_curves.png")
+    fig.savefig(out_path, dpi=120)
     print(f"Saved plot to {out_path}")
     plt.close(fig)
 
