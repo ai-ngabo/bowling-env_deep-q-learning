@@ -2,7 +2,7 @@
 
 Member Name: Principie Cyubahiro
 
-Epsilon start was 1.0 in every experiment. The greedy average is the mean reward once epsilon has reached its floor, which reflects the trained agent. The random baseline to beat is 24.
+Epsilon start was 1.0 in every experiment. The greedy average is the mean reward once epsilon has reached its floor, which reflects the trained agent. The random baseline to beat is 23.1 as per arXiv:1511.06581v3 [cs.LG] 5 Apr 2016 link: [https://arxiv.org/pdf/1511.06581](https://arxiv.org/pdf/1511.06581).
 
 | Experiment | Learning rate | Gamma | Batch size | Epsilon start | Epsilon end | Epsilon decay | Observed behaviour |
 |---|---|---|---|---|---|---|---|
