@@ -277,7 +277,7 @@ Full observations and reasoning are in each member's results file.
 </details>
 
 <details>
-<summary><b>Francis</b>: one change at a time from the baseline · <a href="Francis/FrancisHyperparameter_experiment_results.md">full results</a></summary>
+<summary><b>Francis</b>: one change at a time from the baseline · <a href="Francis/FrancisHyperparameter_experiments_results_table.md">full results</a></summary>
 
 | Exp | lr | γ | Batch | ε start | ε end | ε decay | Avg | Last 20 | Best | Observation |
 |---|---|---|---|---|---|---|---|---|---|---|
