@@ -68,6 +68,8 @@ A Deep Q-Network (DQN) built **from scratch** in PyTorch that learns to play Ata
 - A strike needs a well-timed curve, which random play rarely finds.
 - One safe throw already beats random play, so the agent can settle for it.
 
+**The champion agent playing the game**: [https://drive.google.com/file/d/1Jbf67BcwT9v7w2aTdXtygwzTwVKxl2Oc/view?usp=sharing](https://drive.google.com/file/d/1Jbf67BcwT9v7w2aTdXtygwzTwVKxl2Oc/view?usp=sharing)
+
 ---
 
 ## How our DQN works
